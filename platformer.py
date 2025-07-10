@@ -1,100 +1,142 @@
+# =============================================================================
+# Platformer: The Mysterious Path
+#
+# Author: The Benn/BMKoscak
+# Version: 1.0.0
+#
+# A simple platformer game built with Pygame.
+# The player must navigate through levels, collect parts, avoid enemies,
+# and reach the goal to repair their plane.
+# =============================================================================
+
 import pygame
 import sys
 import random
 from pygame.locals import *
 
+# --- Initialization ---
 pygame.init()
-pygame.mixer.init()
+pygame.mixer.init() # Initialize the mixer for sound effects
 
-# Inicializacija kontrolerjev
+# --- Controller Setup ---
+# Initialize the joystick module to handle game controllers
 pygame.joystick.init()
+# Create a list of all connected joystick/controller devices
 controllers = [pygame.joystick.Joystick(i) for i in range(pygame.joystick.get_count())]
+# Initialize each detected controller
 for controller in controllers:
     controller.init()
 
-# Naloži zvočne učinke
-hurt_sound = pygame.mixer.Sound("assets/sounds/hurt.wav")
-parts_sound = pygame.mixer.Sound("assets/sounds/parts.wav")
-jump_sound = pygame.mixer.Sound("assets/sounds/jump.wav")
-ambiance_sound = pygame.mixer.Sound("assets/sounds/Ambiance_Wind_Calm_Loop_Stereo.wav")
-walk_sound = pygame.mixer.Sound("assets/sounds/walk.wav")
+# --- Load Sound Effects ---
+# It's good practice to wrap asset loading in try-except blocks in a real release
+# to handle missing files gracefully. For simplicity, we'll load them directly.
+try:
+    hurt_sound = pygame.mixer.Sound("assets/sounds/hurt.wav")
+    parts_sound = pygame.mixer.Sound("assets/sounds/parts.wav")
+    jump_sound = pygame.mixer.Sound("assets/sounds/jump.wav")
+    ambiance_sound = pygame.mixer.Sound("assets/sounds/Ambiance_Wind_Calm_Loop_Stereo.wav")
+    walk_sound = pygame.mixer.Sound("assets/sounds/walk.wav")
+except pygame.error as e:
+    print(f"Error loading sound assets: {e}")
+    # Create dummy sound objects if loading fails so the game doesn't crash
+    class DummySound:
+        def play(self): pass
+    hurt_sound = parts_sound = jump_sound = ambiance_sound = walk_sound = DummySound()
 
-# Dimenzije zaslona
+
+# --- Screen and Display Setup ---
 SCREEN_WIDTH, SCREEN_HEIGHT = 1280, 720
+# Use DOUBLEBUF for smoother rendering, especially with many moving elements
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.DOUBLEBUF)
-pygame.display.set_caption("Platformer: Skrivnostna pot")
+pygame.display.set_caption("Platformer: The Mysterious Path")
 
-# Dimenzije ploščic
+# --- Game Constants ---
 TILE_SIZE = 64
+FPS = 60
 
-# Load terrain images
-terrain_tileset = pygame.image.load("assets/terrain/tilesets.png").convert_alpha()
-terrain_tileset = pygame.transform.scale(terrain_tileset, (TILE_SIZE, TILE_SIZE))
+# --- Load Image Assets ---
+# Using a function to load and scale images can reduce code repetition.
+def load_and_scale_image(path, size):
+    """Loads an image, converts it for performance, and scales it."""
+    try:
+        image = pygame.image.load(path).convert_alpha()
+        return pygame.transform.scale(image, size)
+    except pygame.error as e:
+        print(f"Error loading image {path}: {e}")
+        # Return a placeholder surface if the image is missing
+        placeholder = pygame.Surface(size)
+        placeholder.fill((255, 0, 255)) # Use a bright color to easily spot missing assets
+        return placeholder
+
+# Load terrain tileset
+terrain_tileset = load_and_scale_image("assets/terrain/tilesets.png", (TILE_SIZE, TILE_SIZE))
 
 # Load parallax background images
 bg_images = []
 for i in range(1, 6):
     bg_image = pygame.image.load(f"assets/background/plx-{i}.png").convert_alpha()
     bg_images.append(pygame.transform.scale(bg_image, (SCREEN_WIDTH, SCREEN_HEIGHT)))
-bg_width = SCREEN_WIDTH
 
-# Load goal image
-goal_image = pygame.image.load("assets/goal/checkpoint.png").convert_alpha()
-goal_image = pygame.transform.scale(goal_image, (TILE_SIZE * 1.5, TILE_SIZE * 1.5))
+# Load other game assets
+goal_image = load_and_scale_image("assets/goal/checkpoint.png", (int(TILE_SIZE * 1.5), int(TILE_SIZE * 1.5)))
+life_image = load_and_scale_image("assets/life/life.png", (TILE_SIZE // 2, TILE_SIZE // 2))
+part_images = [load_and_scale_image(f"assets/parts/part_{i}.png", (TILE_SIZE, TILE_SIZE)) for i in range(1, 5)]
 
-# Load life image
-life_image = pygame.image.load("assets/life/life.png").convert_alpha()
-life_image = pygame.transform.scale(life_image, (TILE_SIZE // 2, TILE_SIZE // 2))
-
-# Load part images
-part_images = [pygame.image.load(f"assets/parts/part_{i}.png").convert_alpha() for i in range(1, 5)]
-part_images = [pygame.transform.scale(img, (TILE_SIZE, TILE_SIZE)) for img in part_images]
-
-# Barve
+# --- Colors ---
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
 GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
-YELLOW = (255, 255, 0)
-CYAN = (0, 255, 255)
 
-# Ura igre
+# --- Game Clock ---
 clock = pygame.time.Clock()
-FPS = 60
 
-# Pisave
+# --- Font Initialization ---
 pygame.font.init()
-font_path = "assets/fonts/PixelifySans-Regular.ttf"
-font = pygame.font.Font(font_path, 36)
-large_font = pygame.font.Font(font_path, 72)
-title_font = pygame.font.Font("assets/fonts/PixelifySans-Bold.ttf", 72)
+# Using a single font file path variable makes it easy to change fonts later
+try:
+    font_path = "assets/fonts/PixelifySans-Regular.ttf"
+    bold_font_path = "assets/fonts/PixelifySans-Bold.ttf"
+    font = pygame.font.Font(font_path, 36)
+    large_font = pygame.font.Font(font_path, 72)
+    title_font = pygame.font.Font(bold_font_path, 72)
+except FileNotFoundError:
+    print("Font files not found, using default Pygame font.")
+    font = pygame.font.Font(None, 36)
+    large_font = pygame.font.Font(None, 72)
+    title_font = pygame.font.Font(None, 80)
 
-# Naloži ozadje uvoda
+
+# --- Intro Screen Assets ---
 intro_bg = pygame.image.load("assets/intro/intro-bg.jpg").convert()
 intro_bg = pygame.transform.scale(intro_bg, (SCREEN_WIDTH, SCREEN_HEIGHT))
 
-# Naloži in predvajaj uvodno glasbo
-pygame.mixer.music.load("assets/music/intro.ogg")
-pygame.mixer.music.play(-1)
+# --- Music and Sound Settings ---
+try:
+    pygame.mixer.music.load("assets/music/intro.ogg")
+    pygame.mixer.music.play(-1) # Play intro music on a loop
+except pygame.error as e:
+    print(f"Could not load intro music: {e}")
 
-# Nastavitve zvoka
 sound_on = True
 music_on = True
 
-# Zemljevidi sveta
+# --- World Maps ---
+# 'P' = Player Start, 'X' = Tile, 'E' = Enemy (on platform above), 's' = Part
+# 'G' = Goal, 't' = Trap, 'N' = No enemy spawn zone above this point
 world_map_1 = [
     '                                                                                                                                    ',
     '                                                                                                                                    ',
     '                                                                                                                                    ',
     '                                                                                                                                    ',
     '                                                                                                                                    ',
-    '                                       s                                                                                            ',
-    '                              NNNN   XXXXXX                                                                                         ',
-    '                              XXXX                           s                                        s                             ',
-    '                       XXXXX                                XXXXXXX                               XXXXXXXXXXXXX                     ',
-    'P                                                    E                                     XXXX         E                           ',
-    '                                                                             E                                                 G    ',
+    '                     s                                                                                                              ',
+    '               NNNN   XXXXXX                                                                                                        ',
+    '               XXXX                               s                                     s                                           ',
+    '                     XXXXX                                XXXXXXX                                     XXXXXXXXXXXXX                   ',
+    'P                                             E                                   XXXX       E                                     ',
+    '                                                                       E                                                    G       ',
     'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
 ]
 
@@ -102,41 +144,39 @@ world_map_2 = [
     '                                                                                                                                    ',
     '                                                                                                                                    ',
     '                                                                                                                                    ',
-    '                                          s                                               s                                          ',
-    '                                 N    XXXXXXX                                         XXXXXXX                                       ',
-    '                              XXXXXX                                    N     XXXXXX                                                ',
-    '                   N   XXXXX                     E               N     XXXXX                                                        ',
-    '                 XXXX              E                           XXXXXX               E            s                                  ',
-    '     XXXXXX     X                                     XXXXXXX                            XXXXXXXXXXXXXXX                            ',
-    'P         E    XX     X                        E   X                              XX  XX                E                           ',
-    '              XXX      X                          XX                  E                                                   G         ',
+    '                           s                                                 s                                                      ',
+    '                     N    XXXXXXX                                          XXXXXXX                                                   ',
+    '                   XXXXXX                                           N    XXXXXX                                                     ',
+    '             N   XXXXX                   E                    N    XXXXX                                                           ',
+    '           XXXX           E                                  XXXXXX             E            s                                     ',
+    '     XXXXXX     X                                      XXXXXXX                                 XXXXXXXXXXXXXXX                       ',
+    'P       E     XX    X                         E     X                                    XX  XX                E                    ',
+    '             XXX     X                               XX                     E                                             G         ',
     'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
 ]
 
 world_map_3 = [
     '                                                                                                                                    ',
     '                                                                                                                                    ',
-    '                                             s                                                                                      ',
-    '                                    N    XXXXXXX  N                                       s                                         ',
-    '                               N   XXXX         XXXX                              N   XXXXXXX                                       ',
-    '                             XXXX                   XXXX  N                     XXXX                                                ',
-    '                 N     XXXX           E                  XXXX   N       N  XXXX        E                                           ',
-    '               XXXXXX              E                          XXXX    XXXX                    s                                    ',
-    '     XXXXXX   X                                                  XXXX              E     XXXXXXXXXXXXX                             ',
-    'P         E  XX       X                        E                                                      E                            ',
-    '            XXX        X                                              E                                                   G        ',
+    '                                 s                                                                                                  ',
+    '                           N    XXXXXXX   N                                          s                                               ',
+    '                     N   XXXX        XXXX                                     N   XXXXXXX                                           ',
+    '                   XXXX              XXXX   N                             XXXX                                                      ',
+    '             N    XXXX       E              XXXX   N      N  XXXX       E                                                          ',
+    '           XXXXXX           E                      XXXX    XXXX                  s                                                 ',
+    '     XXXXXX   X                                            XXXX           E     XXXXXXXXXXXXX                                     ',
+    'P       E     XX      X                         E                                              E                                  ',
+    '             XXX       X                                         E                                                      G         ',
     'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
 ]
 
-current_level = 1
+# List of all level maps for easy access
 world_maps = [world_map_1, world_map_2, world_map_3]
 
-# Spremenljivke za pomikanje
-scroll_x = 0
-scroll_speed = 8
+# --- Game Classes ---
 
-# Razredi
 class Button:
+    """A simple clickable button class for UI elements."""
     def __init__(self, text, x, y, width, height, color, text_color, hover_color, font):
         self.rect = pygame.Rect(x, y, width, height)
         self.color = color
@@ -144,252 +184,290 @@ class Button:
         self.hover_color = hover_color
         self.text = text
         self.font = font
-        self.txt_surface = self.font.render(text, True, self.text_color)
+        self.is_hovered = False
+        self.render_text()
+
+    def render_text(self):
+        """Renders the button's text to a surface."""
+        self.txt_surface = self.font.render(self.text, True, self.text_color)
 
     def draw(self, surface):
-        pygame.draw.rect(surface, self.color, self.rect)
+        """Draws the button on the given surface."""
+        # Change color on hover for better user feedback
+        current_color = self.hover_color if self.is_hovered else self.color
+        pygame.draw.rect(surface, current_color, self.rect, border_radius=10)
         text_rect = self.txt_surface.get_rect(center=self.rect.center)
         surface.blit(self.txt_surface, text_rect)
 
+    def check_hover(self, pos):
+        """Checks if the mouse position is over the button."""
+        self.is_hovered = self.rect.collidepoint(pos)
+
     def is_clicked(self, pos):
+        """Checks if the button was clicked at the given position."""
         return self.rect.collidepoint(pos)
 
     def update_text(self, new_text):
-        self.text = self.font.render(new_text, True, self.text_color)
-        self.text_rect = self.text.get_rect(center=self.rect.center)
+        """Updates the button's text and re-renders it."""
+        self.text = new_text
+        self.render_text()
 
-# Posodobi razporeditev animacij sovražnikov (2× večja velikost)
-enemy_frames = []
-for i in range(3):
-    frame = pygame.image.load(f"assets/trap/APE1_APE RUNING_{i}.png").convert_alpha()
-    frame = pygame.transform.scale(frame, (TILE_SIZE * 2, TILE_SIZE * 2))
-    enemy_frames.append(frame)
+# Pre-load enemy animation frames to avoid loading them repeatedly
+enemy_frames = [load_and_scale_image(f"assets/trap/APE1_APE RUNING_{i}.png", (TILE_SIZE * 2, TILE_SIZE * 2)) for i in range(3)]
 
 class Enemy:
-    def __init__(self, x, y, width):
-        # Posodobljene dimenzije pravokotnika sovražnika
-        self.rect = pygame.Rect(x, y, TILE_SIZE * 2, TILE_SIZE * 2)
-        self.direction = 1
+    """Represents a moving enemy that patrols a platform."""
+    def __init__(self, x, y, platform_width):
+        # The enemy's visual size is larger than its hitbox for better aesthetics
+        self.rect = pygame.Rect(x, y, TILE_SIZE * 1.5, TILE_SIZE * 1.5)
+        self.direction = 1  # 1 for right, -1 for left
         self.speed = 2
-        self.platform_width = width
+        self.platform_width = platform_width
         self.start_x = x
         self.frames = enemy_frames
-        # Dodaj spremenljivke za sledenje animaciji
         self.frame_index = 0
         self.animation_timer = 0
+        self.animation_speed = 150 # milliseconds per frame
 
     def move(self):
+        """Moves the enemy and reverses its direction at platform edges."""
         self.rect.x += self.speed * self.direction
         if self.rect.left <= self.start_x or self.rect.right >= self.start_x + self.platform_width:
             self.direction *= -1
 
-    def draw(self, surface, scroll_x, dt):
-        # Posodobi časovnik animacije z dt (v ms)
+    def update_animation(self, dt):
+        """Updates the animation frame based on delta time."""
         self.animation_timer += dt
-        frame_duration = 150  # ms na okvir
-        while self.animation_timer >= frame_duration:
-            self.animation_timer -= frame_duration
+        if self.animation_timer >= self.animation_speed:
+            self.animation_timer = 0
             self.frame_index = (self.frame_index + 1) % len(self.frames)
+
+    def draw(self, surface, scroll_x, dt):
+        """Updates animation and draws the enemy."""
+        self.update_animation(dt)
         image = self.frames[self.frame_index]
+        # Flip the image based on the direction the enemy is facing
         if self.direction == 1:
             image = pygame.transform.flip(image, True, False)
-        # Prilagoditev navpičnega poravnanja - poravnava stop sovražnika z vrhom ploščice
+        # Adjust vertical position to align enemy's feet with the platform
         pos = (self.rect.x - scroll_x, self.rect.y + TILE_SIZE - image.get_height())
         surface.blit(image, pos)
 
 class Part:
+    """Represents a collectible part that the player needs to find."""
     def __init__(self, x, y):
         self.rect = pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)
         self.image = random.choice(part_images)
         self.float_direction = 1
         self.float_offset = 0
+        self.float_speed = 0.5
+        self.float_range = 5
 
     def update(self):
-        self.float_offset += self.float_direction * 0.5
-        if abs(self.float_offset) >= 5:
+        """Updates the floating animation of the part."""
+        self.float_offset += self.float_direction * self.float_speed
+        if abs(self.float_offset) >= self.float_range:
             self.float_direction *= -1
 
     def draw(self, surface, scroll_x):
+        """Draws the part on the screen."""
         pos = (self.rect.x - scroll_x, self.rect.y + self.float_offset)
         surface.blit(self.image, pos)
 
 class Player:
+    """Represents the player character."""
     def __init__(self, x, y):
-        self.rect = pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)
+        # Physics and state variables
+        self.rect = pygame.Rect(x, y, TILE_SIZE * 0.8, TILE_SIZE) # Make hitbox slightly smaller than tile
         self.velocity = [0, 0]
         self.on_ground = False
         self.lives = 3
         self.collected_parts = 0
-        self.invulnerable = False
-        self.invulnerable_timer = 0
+        self.spawn_point = (x, y)
+
+        # Player attributes
         self.speed = 7
         self.jump_strength = 22
         self.gravity = 1.0
         self.max_fall_speed = 18
-        self.spawn_point = (x, y)
-        self.invulnerable_duration = FPS * 2
-        # Dodaj lastnosti za animacijo in smer
-        self.state = "idle"  # stanja: idle, walk, jump, fall, win, lose, hurt
+
+        # Invulnerability state after taking damage
+        self.invulnerable = False
+        self.invulnerable_duration = 2000 # in milliseconds
+        self.invulnerable_timer = 0
+
+        # Animation state machine
+        self.state = "idle"
         self.animations = self.load_player_animations()
         self.frame_index = 0
         self.animation_timer = 0
-        self.animation_speed = 100  # ms na okvir
+        self.animation_speed = 100 # ms per frame
         self.facing_right = True
-        # Dodaj časovnik za poškodbe (v milisekundah)
         self.hurt_timer = 0
-        self.controller_deadzone = 0.2  # Dodaj mrtvo območje za analogno palico
+
+        # Controller settings
+        self.controller_deadzone = 0.2
 
     def load_player_animations(self):
+        """Loads all player animation frames from image files."""
         animations = {}
-        # win (spritesheet: win.png, frame 92x63, image size 1152x64)
-        win_sheet = pygame.image.load("assets/player/win/win.png").convert_alpha()
-        animations["win"] = self.split_spritesheet(win_sheet, 92, 63)
-        # idle (4 individualni okviri)
-        idle_frames = []
-        for i in range(1, 5):
-            img = pygame.image.load(f"assets/player/idle/idle-{i}.png").convert_alpha()
-            idle_frames.append(img)
-        animations["idle"] = idle_frames
-        # walk (10 individualnih okvirjev)
-        walk_frames = []
-        for i in range(1, 11):
-            img = pygame.image.load(f"assets/player/walk/walk_{i}.png").convert_alpha()
-            walk_frames.append(img)
-        animations["walk"] = walk_frames
-        # fall (4 individualni okviri)
-        fall_frames = []
-        for i in range(1, 5):
-            img = pygame.image.load(f"assets/player/fall/fall-{i}.png").convert_alpha()
-            fall_frames.append(img)
-        animations["fall"] = fall_frames
-        # jump (spritesheet: jump.png, frame 86x64, image size 576x64)
-        jump_sheet = pygame.image.load("assets/player/jump/jump.png").convert_alpha()
-        animations["jump"] = self.split_spritesheet(jump_sheet, 86, 64)
-        # lose (spritesheet: lose.png, frame 98x64, image size 1728x64)
-        lose_sheet = pygame.image.load("assets/player/lose/lose.png").convert_alpha()
-        animations["lose"] = self.split_spritesheet(lose_sheet, 98, 64)
-        # Dodaj animacije za poškodbe
-        hurt_frames = []
-        for i in range(1, 4):
-            img = pygame.image.load(f"assets/player/hurt/hurt_{i}.png").convert_alpha()
-            hurt_frames.append(img)
-        animations["hurt"] = hurt_frames
+        anim_data = {
+            "win": ("assets/player/win/win.png", 92, 63),
+            "idle": [f"assets/player/idle/idle-{i}.png" for i in range(1, 5)],
+            "walk": [f"assets/player/walk/walk_{i}.png" for i in range(1, 11)],
+            "fall": [f"assets/player/fall/fall-{i}.png" for i in range(1, 5)],
+            "jump": ("assets/player/jump/jump.png", 86, 64),
+            "lose": ("assets/player/lose/lose.png", 98, 64),
+            "hurt": [f"assets/player/hurt/hurt_{i}.png" for i in range(1, 4)]
+        }
+
+        for state, data in anim_data.items():
+            if isinstance(data, tuple): # Spritesheet
+                sheet_path, frame_w, frame_h = data
+                sheet = pygame.image.load(sheet_path).convert_alpha()
+                animations[state] = self.split_spritesheet(sheet, frame_w, frame_h)
+            else: # Individual frames
+                animations[state] = [pygame.image.load(p).convert_alpha() for p in data]
         return animations
 
     def split_spritesheet(self, sheet, frame_width, frame_height):
+        """Splits a spritesheet into a list of individual frame images."""
         frames = []
-        sheet_width, sheet_height = sheet.get_size()
+        sheet_width, _ = sheet.get_size()
         for i in range(sheet_width // frame_width):
             frame = sheet.subsurface((i * frame_width, 0, frame_width, frame_height))
             frames.append(frame)
         return frames
 
     def update_animation(self, dt):
+        """Updates the current animation frame based on delta time."""
+        # For single-frame animations, no update is needed
+        if len(self.animations[self.state]) <= 1:
+            self.frame_index = 0
+            return
+
         self.animation_timer += dt
-        while self.animation_timer >= self.animation_speed:
-            self.animation_timer -= self.animation_speed
+        if self.animation_timer >= self.animation_speed:
+            self.animation_timer = 0
             self.frame_index = (self.frame_index + 1) % len(self.animations[self.state])
 
-    def draw(self, surface, scroll, dt):
-        # Določi pravilno stanje
+    def set_state(self):
+        """Determines the player's animation state based on their actions."""
+        # Hurt state takes priority
         if self.hurt_timer > 0:
             new_state = "hurt"
-            self.hurt_timer = max(0, self.hurt_timer - dt)
+        # Then check for aerial states
+        elif not self.on_ground:
+            new_state = "jump" if self.velocity[1] < 0 else "fall"
+        # Then ground states
         else:
-            if not self.on_ground:
-                new_state = "jump" if self.velocity[1] < 0 else "fall"
-            else:
-                new_state = "walk" if abs(self.velocity[0]) > 0 else "idle"
+            new_state = "walk" if abs(self.velocity[0]) > 0 else "idle"
 
-        # Ponastavi indeks animacije, če se stanje spremeni
+        # If the state has changed, reset the animation
         if new_state != self.state:
             self.state = new_state
             self.frame_index = 0
             self.animation_timer = 0
 
+    def draw(self, surface, scroll, dt):
+        """Draws the player on the screen."""
+        self.set_state()
         self.update_animation(dt)
+
         current_image = self.animations[self.state][self.frame_index]
-        
-        # Povečaj sliko
-        scaled_image = pygame.transform.scale(current_image, (current_image.get_width()*2, current_image.get_height()*2))
+        # Scale up the player sprite for a better visual size
+        scaled_image = pygame.transform.scale(current_image, (current_image.get_width() * 2, current_image.get_height() * 2))
+
+        # Flip the image if facing left
         if not self.facing_right:
             scaled_image = pygame.transform.flip(scaled_image, True, False)
 
-        # Izračunaj centrirano pozicijo
+        # Center the scaled image over the player's hitbox
         x = self.rect.x - scroll - (scaled_image.get_width() - self.rect.width) // 2
         y = self.rect.bottom - scaled_image.get_height()
 
-        surface.blit(scaled_image, (x, y))
+        # Make player semi-transparent when invulnerable for visual feedback
+        if self.invulnerable and (pygame.time.get_ticks() // 100) % 2 == 0:
+            # This creates a blinking effect
+            pass # Don't draw the player to make them "blink"
+        else:
+            surface.blit(scaled_image, (x, y))
 
-    def is_dead(self):
-        return self.lives <= 0
 
     def move(self, keys, tiles, controller=None):
+        """Handles player movement and input."""
         dx = 0
-        dy = 0
-
-        # Kontrole s tipkovnico
-        if keys[K_LEFT]:
+        
+        # --- Horizontal Movement ---
+        # Keyboard controls
+        if keys[K_LEFT] or keys[K_a]:
             dx = -self.speed
             self.facing_right = False
-        if keys[K_RIGHT]:
+        if keys[K_RIGHT] or keys[K_d]:
             dx = self.speed
             self.facing_right = True
 
-        # Kontrole s kontrolerjem
+        # Controller controls (analog stick)
         if controller:
             analog_x = controller.get_axis(0)
             if abs(analog_x) > self.controller_deadzone:
                 dx = self.speed * analog_x
-                self.facing_right = analog_x > 0
+                if dx != 0: # Only change direction if there's movement
+                    self.facing_right = analog_x > 0
 
-            if controller.get_button(0) and self.on_ground:
-                self.velocity[1] = -self.jump_strength
-                self.on_ground = False
-                if sound_on:
-                    jump_sound.play()
-
-        # Skok s tipkovnico
-        if keys[K_UP] and self.on_ground:
-            self.velocity[1] = -self.jump_strength
-            self.on_ground = False
-            if sound_on:
-                jump_sound.play()
-
-        # Shrani horizontalno gibanje za zaznavanje stanja animacije
         self.velocity[0] = dx
 
+        # --- Vertical Movement (Jumping) ---
+        # Keyboard jump
+        if (keys[K_UP] or keys[K_w] or keys[K_SPACE]) and self.on_ground:
+            self.velocity[1] = -self.jump_strength
+            self.on_ground = False
+            if sound_on: jump_sound.play()
+
+        # Controller jump (typically the 'A' button, which is button 0)
+        if controller and controller.get_button(0) and self.on_ground:
+            self.velocity[1] = -self.jump_strength
+            self.on_ground = False
+            if sound_on: jump_sound.play()
+
+        # --- Apply Gravity ---
         self.velocity[1] += self.gravity
+        # Clamp falling speed to prevent excessive velocity
         if self.velocity[1] > self.max_fall_speed:
             self.velocity[1] = self.max_fall_speed
 
         dy = self.velocity[1]
 
-        self.handle_collision(tiles, dx, dy)
-
+        # --- Collision Handling ---
+        self.handle_collision(tiles, self.velocity[0], dy)
         self.check_on_ground(tiles)
 
     def handle_collision(self, tiles, dx, dy):
+        """Handles collision with solid tiles."""
+        # Move horizontally and check for collisions
         self.rect.x += dx
         for tile in tiles:
             if self.rect.colliderect(tile['rect']):
-                if dx > 0:
+                if dx > 0: # Moving right
                     self.rect.right = tile['rect'].left
-                elif dx < 0:
+                elif dx < 0: # Moving left
                     self.rect.left = tile['rect'].right
 
+        # Move vertically and check for collisions
         self.rect.y += dy
         for tile in tiles:
             if self.rect.colliderect(tile['rect']):
-                if dy > 0:
+                if dy > 0: # Moving down
                     self.rect.bottom = tile['rect'].top
                     self.velocity[1] = 0
                     self.on_ground = True
-                elif dy < 0:
+                elif dy < 0: # Moving up
                     self.rect.top = tile['rect'].bottom
                     self.velocity[1] = 0
 
     def check_on_ground(self, tiles):
+        """Checks if the player is standing on a solid tile."""
+        # Temporarily move the player down 1 pixel to check for ground
         self.rect.y += 1
         on_ground = False
         for tile in tiles:
@@ -399,433 +477,409 @@ class Player:
         self.rect.y -= 1
         self.on_ground = on_ground
 
-    def update_invulnerability(self):
+    def update_timers(self, dt):
+        """Updates all time-based states for the player."""
         if self.invulnerable:
-            self.invulnerable_timer -= 1
+            self.invulnerable_timer -= dt
             if self.invulnerable_timer <= 0:
                 self.invulnerable = False
-                self.invulnerable_timer = 0
+        
+        if self.hurt_timer > 0:
+            self.hurt_timer = max(0, self.hurt_timer - dt)
 
     def respawn(self):
+        """Resets the player to their spawn point after losing a life."""
         self.rect.topleft = self.spawn_point
         self.velocity = [0, 0]
         self.invulnerable = True
         self.invulnerable_timer = self.invulnerable_duration
 
-    def check_collision(self, tiles, traps, parts, goal, enemies):
-        for enemy in enemies:
-            if self.rect.colliderect(enemy.rect):
-                if not self.invulnerable:
-                    return 'hit_enemy'
+    def take_damage(self):
+        """Handles the logic for when the player takes damage."""
+        if not self.invulnerable:
+            self.lives -= 1
+            self.invulnerable = True
+            self.invulnerable_timer = self.invulnerable_duration
+            self.hurt_timer = 300 # Duration of the hurt animation
+            if sound_on:
+                hurt_sound.play()
+            if self.lives <= 0:
+                return "game_over"
+        return "none"
 
-        for trap in traps:
-            if self.rect.colliderect(trap):
-                if not self.invulnerable:
-                    return 'hit_trap'
+# --- Game Functions ---
 
-        for part in parts[:]:
-            if self.rect.colliderect(part.rect):
-                parts.remove(part)
-                self.collected_parts += 1
-                return 'collected'
-
-        if goal and self.rect.colliderect(goal) and self.collected_parts >= 3:
-            return 'level_complete'
-
-        return 'none'
-
-# Funkcije
-def draw_map(world_map, existing_parts=None):
-    tiles = []
-    traps = []
-    parts = existing_parts if existing_parts is not None else []
+def parse_map(world_map):
+    """Parses the string-based map into lists of game objects."""
+    tiles, traps, parts, enemies = [], [], [], []
     goal = None
-    enemies = []
-
+    
     for row_index, row in enumerate(world_map):
         platform_start = None
-        last_enemy_x = -float('inf')
-        for col_index, col in enumerate(row):
+        for col_index, char in enumerate(row):
             x = col_index * TILE_SIZE
             y = SCREEN_HEIGHT - (len(world_map) - row_index) * TILE_SIZE
-            if col == 'X':
-                tiles.append({
-                    'rect': pygame.Rect(x, y, TILE_SIZE, TILE_SIZE),
-                    'sprite': terrain_tileset
-                })
+            
+            if char == 'X':
+                tiles.append({'rect': pygame.Rect(x, y, TILE_SIZE, TILE_SIZE), 'sprite': terrain_tileset})
                 if platform_start is None:
-                    platform_start = x
-            elif col == ' ' and platform_start is not None:
-                platform_width = x - platform_start
-                if platform_width >= TILE_SIZE * 4:
-                    # Check if there's an 'N' above the current platform
-                    platform_start_idx = platform_start // TILE_SIZE
-                    platform_end_idx = col_index
-                    no_spawn_zone = False
-                    
-                    # Check the row above for 'N' characters
-                    if row_index > 0:
-                        for check_idx in range(platform_start_idx, platform_end_idx):
-                            if world_map[row_index - 1][check_idx] == 'N':
-                                no_spawn_zone = True
-                                break
-                    
-                    # Only spawn enemy if not in no-spawn zone and far enough from last enemy
-                    if not no_spawn_zone and x - last_enemy_x > TILE_SIZE * 8:
-                        enemies.append(Enemy(platform_start, y - TILE_SIZE, platform_width))
-                        last_enemy_x = x
+                    platform_start = col_index
+            elif char != 'X' and platform_start is not None:
+                # End of a platform, check if an enemy should spawn
+                platform_end = col_index
+                platform_width_tiles = platform_end - platform_start
+                
+                # Check for 'N' (no-spawn) marker in the row above
+                no_spawn = False
+                if row_index > 0 and platform_width_tiles >= 4:
+                    for i in range(platform_start, platform_end):
+                        if world_map[row_index - 1][i] == 'N':
+                            no_spawn = True
+                            break
+                
+                if not no_spawn and platform_width_tiles >= 4:
+                    enemy_x = platform_start * TILE_SIZE
+                    enemy_y = y - TILE_SIZE
+                    enemies.append(Enemy(enemy_x, enemy_y, platform_width_tiles * TILE_SIZE))
+
                 platform_start = None
-            elif col == 't':
+
+            elif char == 't':
                 traps.append(pygame.Rect(x, y, TILE_SIZE, TILE_SIZE))
-            elif col == 's' and (existing_parts is None or not any(part.rect.colliderect(pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)) for part in existing_parts)):
+            elif char == 's':
                 parts.append(Part(x, y))
-            elif col == 'G':
+            elif char == 'G':
                 goal = pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)
-                continue  # Remove checkpoint handling
+            elif char == 'P':
+                player_start_pos = (x, y)
 
-    return tiles, traps, parts, goal, enemies
+    return tiles, traps, parts, goal, enemies, player_start_pos
 
-def draw_intro():
+def draw_intro_screen():
+    """Draws the main menu/intro screen and its buttons."""
     screen.blit(intro_bg, (0, 0))
 
-    shadow_offset = 3
-    shadow_color = (0, 0, 0, 128)
+    # Draw title with a shadow for better visibility
+    shadow_offset = 4
+    title_text = "The Mysterious Path"
+    shadow = title_font.render(title_text, True, (0, 0, 0, 128))
+    screen.blit(shadow, (SCREEN_WIDTH // 2 - shadow.get_width() // 2 + shadow_offset, SCREEN_HEIGHT // 4 - shadow.get_height() // 2 + shadow_offset))
+    title = title_font.render(title_text, True, WHITE)
+    screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, SCREEN_HEIGHT // 4 - title.get_height() // 2))
 
-    shadow_text = title_font.render("Skrivnostna pot", True, shadow_color)
-    shadow_rect = shadow_text.get_rect(center=(SCREEN_WIDTH // 2 + shadow_offset, SCREEN_HEIGHT // 4 + shadow_offset))
+    # Button layout
+    button_width, button_height, button_spacing = 300, 60, 20
+    start_x = SCREEN_WIDTH // 2 - button_width // 2
+    start_y = SCREEN_HEIGHT // 2
 
-    shadow_surface = pygame.Surface(shadow_text.get_size(), pygame.SRCALPHA)
-    shadow_surface.blit(shadow_text, (0, 0))
+    # Create buttons
+    start_button = Button("Start Game", start_x, start_y, button_width, button_height, (0, 100, 0), WHITE, (0, 150, 0), font)
+    
+    music_text = "Music: ON" if music_on else "Music: OFF"
+    music_button = Button(music_text, start_x, start_y + (button_height + button_spacing), button_width, button_height, (100, 180, 255), BLACK, (150, 200, 255), font)
+    
+    sound_text = "Sound FX: ON" if sound_on else "Sound FX: OFF"
+    sound_button = Button(sound_text, start_x, start_y + 2 * (button_height + button_spacing), button_width, button_height, (100, 180, 255), BLACK, (150, 200, 255), font)
+    
+    controls_button = Button("Controls", start_x, start_y + 3 * (button_height + button_spacing), button_width, button_height, (100, 180, 255), BLACK, (150, 200, 255), font)
 
-    screen.blit(shadow_surface, shadow_rect)
-
-    title = title_font.render("Skrivnostna pot", True, WHITE)
-    title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 4))
-    screen.blit(title, title_rect)
-
-    button_width = 300
-    button_height = 60
-    button_spacing = 20
-
-    start_button = Button("Prični z igro", 
-                          SCREEN_WIDTH // 2 - button_width // 2, 
-                          SCREEN_HEIGHT // 2, 
-                          button_width, button_height, 
-                          (0, 100, 0), WHITE, (0, 150, 0), font)
-
-    music_text = "Glasba: ON" if music_on else "Glasba: OFF"
-    music_button = Button(music_text,
-                          SCREEN_WIDTH // 2 - button_width // 2, 
-                          SCREEN_HEIGHT // 2 + button_height + button_spacing, 
-                          button_width, button_height, 
-                          (100, 180, 255), BLACK, (150, 200, 255), font)
-
-    sound_text = "Zvočni učinki: ON" if sound_on else "Zvočni učinki: OFF"
-    sound_button = Button(sound_text,
-                          SCREEN_WIDTH // 2 - button_width // 2, 
-                          SCREEN_HEIGHT // 2 + 2 * (button_height + button_spacing), 
-                          button_width, button_height, 
-                          (100, 180, 255), BLACK, (150, 200, 255), font)
-
-    # Add controls button
-    controls_button = Button("Tipke", 
-                           SCREEN_WIDTH // 2 - button_width // 2, 
-                           SCREEN_HEIGHT // 2 + 3 * (button_height + button_spacing), 
-                           button_width, button_height, 
-                           (100, 180, 255), BLACK, (150, 200, 255), font)
-
-    start_button.draw(screen)
-    music_button.draw(screen)
-    sound_button.draw(screen)
-    controls_button.draw(screen)
+    buttons = [start_button, music_button, sound_button, controls_button]
+    
+    # Check for hover and draw buttons
+    mouse_pos = pygame.mouse.get_pos()
+    for button in buttons:
+        button.check_hover(mouse_pos)
+        button.draw(screen)
 
     pygame.display.flip()
+    return buttons
 
-    return start_button, music_button, sound_button, controls_button
-
-def draw_text_screen(text, duration=2000):
-    screen.fill(WHITE)
-    message = font.render(text, True, BLACK)
+def draw_text_screen(text, duration_ms=2000):
+    """Displays a centered message on a black screen for a set duration."""
+    screen.fill(BLACK)
+    message = large_font.render(text, True, WHITE)
     message_rect = message.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
     screen.blit(message, message_rect)
     pygame.display.flip()
-    pygame.time.wait(duration)
+    pygame.time.wait(duration_ms) # Simple wait, fine for transitions
 
-def draw_message(text, color=BLACK):
+def draw_message(text, color=WHITE):
+    """Draws a message overlay on the game screen, typically a hint."""
     message = font.render(text, True, color)
-    message_rect = message.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 100))
+    # Position message above the center
+    message_rect = message.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 100))
+    # Add a semi-transparent background for readability
+    bg_rect = message_rect.inflate(20, 20)
+    s = pygame.Surface(bg_rect.size, pygame.SRCALPHA)
+    s.fill((0, 0, 0, 150))
+    screen.blit(s, bg_rect)
     screen.blit(message, message_rect)
 
-def reset_game_state(level):
-    player = Player(TILE_SIZE, SCREEN_HEIGHT - 2 * TILE_SIZE)
-    tiles, traps, parts, goal, enemies = draw_map(world_maps[level - 1])
+def reset_game_state(level_index):
+    """Resets the game to the start of a specific level."""
+    tiles, traps, parts, goal, enemies, player_pos = parse_map(world_maps[level_index])
+    player = Player(player_pos[0], player_pos[1])
     return player, tiles, traps, parts, goal, enemies
 
-def play_mini_game():
-    pygame.init()
-    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    font = pygame.font.Font(None, 72)
-    clock = pygame.time.Clock()
-
+def play_final_challenge():
+    """A simple reaction-based mini-game for the end."""
     number = random.randint(0, 9)
-    text = font.render(f"Pritisni številko {number}, da končaš popravilo letala.", True, BLACK)
-    text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
-
-    screen.fill(WHITE)
-    screen.blit(text, text_rect)
-    pygame.display.flip()
-
+    prompt_text = f"Press the number {number} to fix the plane!"
+    
     start_time = pygame.time.get_ticks()
+    time_limit = 3000 # 3 seconds
 
-    while pygame.time.get_ticks() - start_time < 3000:
+    while pygame.time.get_ticks() - start_time < time_limit:
+        # Draw the prompt on every frame
+        screen.fill(WHITE)
+        text_surface = large_font.render(prompt_text, True, BLACK)
+        text_rect = text_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+        screen.blit(text_surface, text_rect)
+        pygame.display.flip()
+
         for event in pygame.event.get():
             if event.type == QUIT:
                 pygame.quit()
                 sys.exit()
             elif event.type == KEYDOWN:
                 if event.unicode == str(number):
-                    return True
+                    return True # Success
+        clock.tick(FPS)
+    return False # Failed
 
-        clock.tick(60)
-
-    return False
-
-# Posodobi za brezšivno ploščanje vsake plasti ozadja.
-def draw_bg(scroll):
+def draw_background(scroll):
+    """Draws the parallax scrolling background."""
     for i, bg in enumerate(bg_images):
+        # Each layer scrolls at a different speed to create depth
         speed = 0.2 * (i + 1)
+        # The modulo operator creates a seamless loop
         offset = int(-(scroll * speed)) % SCREEN_WIDTH
         screen.blit(bg, (offset - SCREEN_WIDTH, 0))
         screen.blit(bg, (offset, 0))
 
-def draw_lives(surface, lives, x, y):
+def draw_hud(surface, lives, collected_parts, current_level_num):
+    """Draws the Heads-Up Display (lives, parts, level)."""
+    # Draw lives
     for i in range(lives):
-        surface.blit(life_image, (x + i * (TILE_SIZE // 2 + 5), y))
+        surface.blit(life_image, (10 + i * (life_image.get_width() + 5), 10))
+    
+    # Draw collected parts text
+    parts_text = font.render(f"Parts: {collected_parts}/3", True, WHITE)
+    surface.blit(parts_text, (10, 50))
+    
+    # Draw current level text
+    level_text = font.render(f"Level: {current_level_num}", True, WHITE)
+    surface.blit(level_text, (10, 90))
 
 def draw_controls_screen():
-    screen.fill(BLACK)
-    controls = [
-        "=== Tipkovnica ===",
-        "Puščice - Premikanje",
-        "Puščica gor - Skok",
-        "E - Interakcija",
-        "",
-        "=== Kontroler ===",
-        "Leva palica - Premikanje",
-        "A - Skok",
-        "X - Interakcija",
-        "",
-        "Pritisni ESC za vrnitev"
-    ]
-    
-    y_offset = SCREEN_HEIGHT // 4
-    for line in controls:
-        text = font.render(line, True, WHITE)
-        text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, y_offset))
-        screen.blit(text, text_rect)
-        y_offset += 50
-    
-    pygame.display.flip()
-
-def main():
-    global sound_on, music_on
-    game_state = "intro"
-    in_controls = False
-    current_level = 1
-    player, tiles, traps, parts, goal, enemies = reset_game_state(current_level)
-
-    start_button, music_button, sound_button, controls_button = None, None, None, None
-    last_footstep_time = 0
-    footstep_delay = 300
-
-    running = True
-    scroll = 0
-    while running:
-        dt = clock.tick(FPS)
+    """Displays the controls screen."""
+    showing_controls = True
+    while showing_controls:
+        screen.fill(BLACK)
+        controls = [
+            "=== Keyboard ===",
+            "A/D or Left/Right Arrows - Move",
+            "W, Up Arrow, or Space - Jump",
+            "E - Interact",
+            "",
+            "=== Controller ===",
+            "Left Stick - Move",
+            "A Button (Bottom Face) - Jump",
+            "X Button (Left Face) - Interact",
+            "",
+            "Press ESC to return to menu"
+        ]
         
-        controller = controllers[0] if controllers else None
+        y_offset = SCREEN_HEIGHT // 4
+        for line in controls:
+            text = font.render(line, True, WHITE)
+            text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, y_offset))
+            screen.blit(text, text_rect)
+            y_offset += 50
+        
+        pygame.display.flip()
 
         for event in pygame.event.get():
             if event.type == QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == KEYDOWN and event.key == K_ESCAPE:
+                showing_controls = False
+        
+        clock.tick(FPS)
+
+# --- Main Game Loop ---
+
+def main():
+    """The main function that runs the game."""
+    global sound_on, music_on
+    
+    game_state = "intro"
+    current_level_index = 0
+    player, tiles, traps, parts, goal, enemies = reset_game_state(current_level_index)
+
+    # Timers for sound effects
+    last_footstep_time = 0
+    footstep_delay = 300 # ms
+
+    running = True
+    scroll = 0
+    
+    while running:
+        # Delta time for frame-rate independent physics and animations
+        dt = clock.tick(FPS)
+        
+        # Get the primary controller if one is connected
+        controller = controllers[0] if controllers else None
+
+        # --- Event Handling ---
+        for event in pygame.event.get():
+            if event.type == QUIT:
                 running = False
-            elif event.type == KEYDOWN and event.key == K_ESCAPE and in_controls:
-                in_controls = False
-                game_state = "intro"
-            elif event.type == MOUSEBUTTONDOWN and game_state == "intro":
-                if start_button and start_button.is_clicked(event.pos):
+            
+            # Handle intro screen button clicks
+            if game_state == "intro" and event.type == MOUSEBUTTONDOWN:
+                buttons = draw_intro_screen() # Get current buttons
+                start_button, music_button, sound_button, controls_button = buttons
+                
+                if start_button.is_clicked(event.pos):
                     game_state = "playing"
                     if music_on:
-                        pygame.mixer.music.load("assets/music/glasba_ozadje.mp3")
-                        pygame.mixer.music.play(-1)
-                elif music_button and music_button.is_clicked(event.pos):
+                        try:
+                            pygame.mixer.music.load("assets/music/glasba_ozadje.mp3")
+                            pygame.mixer.music.play(-1)
+                        except pygame.error as e:
+                            print(f"Could not load main game music: {e}")
+
+                elif music_button.is_clicked(event.pos):
                     music_on = not music_on
-                    music_text = "Glasba: ON" if music_on else "Glasba: OFF"
-                    music_button.update_text(music_text)
-                    if music_on:
-                        pygame.mixer.music.unpause()
-                    else:
-                        pygame.mixer.music.pause()
-                elif sound_button and sound_button.is_clicked(event.pos):
+                    if music_on: pygame.mixer.music.unpause()
+                    else: pygame.mixer.music.pause()
+
+                elif sound_button.is_clicked(event.pos):
                     sound_on = not sound_on
-                    sound_text = "Zvočni učinki: ON" if sound_on else "Zvočni učinki: OFF"
-                    sound_button.update_text(sound_text)
-                elif controls_button and controls_button.is_clicked(event.pos):
-                    in_controls = True
+                
+                elif controls_button.is_clicked(event.pos):
                     draw_controls_screen()
-            elif (event.type == KEYDOWN or 
-                  (controller and event.type == JOYBUTTONDOWN)) and game_state == "playing":
-                handle_interaction = False
-                
-                if event.type == KEYDOWN and event.key == K_e:
-                    handle_interaction = True
-                elif controller and event.type == JOYBUTTONDOWN and event.button == 2:
-                    handle_interaction = True
-                
-                if handle_interaction and player.rect.colliderect(goal) and player.collected_parts >= 3:
-                    if current_level < 3:
-                        current_level += 1
-                        player, tiles, traps, parts, goal, enemies = reset_game_state(current_level)
-                        player.collected_parts = 0
-                    elif current_level == 3:
-                        if play_mini_game():
+
+            # Handle interaction key press (E or Controller X)
+            is_interaction_press = (event.type == KEYDOWN and event.key == K_e) or \
+                                   (controller and event.type == JOYBUTTONDOWN and event.button == 2)
+
+            if game_state == "playing" and is_interaction_press:
+                if goal and player.rect.colliderect(goal) and player.collected_parts >= 3:
+                    if current_level_index < len(world_maps) - 1:
+                        # Move to the next level
+                        current_level_index += 1
+                        player, tiles, traps, parts, goal, enemies = reset_game_state(current_level_index)
+                        scroll = 0 # Reset scroll for new level
+                    else:
+                        # Final level completed, start the mini-game
+                        if play_final_challenge():
                             game_state = "game_complete"
                         else:
-                            draw_text_screen("Popravilo letala ni bilo uspešno, opice so te ujele!", 2000)
+                            draw_text_screen("Repair failed! The apes caught you!", 2000)
                             game_state = "game_over"
 
-        if game_state == "intro" and not in_controls:
-            start_button, music_button, sound_button, controls_button = draw_intro()
-            
-            if controller:
-                if controller.get_button(0):
-                    game_state = "playing"
-                    if music_on:
-                        pygame.mixer.music.load("assets/music/glasba_ozadje.mp3")
-                        pygame.mixer.music.play(-1)
-                elif controller.get_button(1):
-                    music_on = not music_on
-                    music_text = "Glasba: ON" if music_on else "Glasba: OFF"
-                    music_button.update_text(music_text)
-                    if music_on:
-                        pygame.mixer.music.unpause()
-                    else:
-                        pygame.mixer.music.pause()
-                elif controller.get_button(2):
-                    sound_on = not sound_on
-                    sound_text = "Zvočni učinki: ON" if sound_on else "Zvočni učinki: OFF"
-                    sound_button.update_text(sound_text)
+        # --- Game State Logic ---
+        if game_state == "intro":
+            draw_intro_screen()
 
         elif game_state == "playing":
-
+            # --- Update Game Objects ---
             keys = pygame.key.get_pressed()
-            current_time = pygame.time.get_ticks()
             player.move(keys, tiles, controller)
-            
-            is_moving = (keys[K_LEFT] or keys[K_RIGHT] or 
-                        (controller and abs(controller.get_axis(0)) > player.controller_deadzone))
-            
-            if is_moving and player.on_ground and sound_on:
-                if current_time - last_footstep_time >= footstep_delay:
-                    walk_sound.play()
-                    last_footstep_time = current_time
-
-            player.update_invulnerability()
+            player.update_timers(dt)
 
             for enemy in enemies:
                 enemy.move()
-
             for part in parts:
                 part.update()
 
-            collision_result = player.check_collision(tiles, traps, parts, goal, enemies)
-
-            if collision_result == 'collected' and sound_on:
-                parts_sound.play()
-
-            if collision_result == 'hit_enemy' and not player.invulnerable:
-                if player.hurt_timer == 0:
-                    player.hurt_timer = 300
-
-            if collision_result in ['hit_trap', 'hit_enemy']:
-                if collision_result == 'hit_enemy' and sound_on:
-                    hurt_sound.play()
-                if not player.invulnerable:
-                    player.lives -= 1
-                    player.invulnerable = True
-                    player.invulnerable_timer = FPS * 2
-                    if player.lives <= 0:
-                        game_state = "game_over"
-
-            player.update_invulnerability()
-
-            level_width = len(world_maps[current_level - 1][0]) * TILE_SIZE
-            player.rect.x = max(0, min(player.rect.x, level_width - player.rect.width))
-            
+            # --- Handle Collisions and Events ---
+            # Check for falling out of the world
             if player.rect.top > SCREEN_HEIGHT:
-                player.respawn()
+                player.lives -= 1
+                if player.lives > 0:
+                    player.respawn()
+                else:
+                    game_state = "game_over"
 
-            desired_scroll = player.rect.centerx - SCREEN_WIDTH // 2
-            scroll += (desired_scroll - scroll) * 0.1
-            level_width = len(world_maps[current_level - 1][0]) * TILE_SIZE
-            scroll = max(0, min(scroll, level_width - SCREEN_WIDTH))
-            
-            level_top = SCREEN_HEIGHT - len(world_maps[current_level - 1]) * TILE_SIZE
-            level_bottom = SCREEN_HEIGHT - player.rect.height
-            player.rect.y = max(level_top, min(player.rect.y, level_bottom))
-            
-            draw_bg(scroll)
-
+            # Check for collision with enemies
             for enemy in enemies:
-                enemy.draw(screen, scroll, dt)
+                if player.rect.colliderect(enemy.rect):
+                    if player.take_damage() == "game_over":
+                        game_state = "game_over"
+            
+            # Check for collision with parts
+            for part_obj in parts[:]:
+                if player.rect.colliderect(part_obj.rect):
+                    parts.remove(part_obj)
+                    player.collected_parts += 1
+                    if sound_on: parts_sound.play()
+
+            # --- Scrolling ---
+            # Smooth camera scrolling that follows the player
+            desired_scroll = player.rect.centerx - SCREEN_WIDTH // 2
+            scroll += (desired_scroll - scroll) * 0.1 # The 0.1 creates a smooth "lerp" effect
+            # Clamp scroll to level boundaries
+            level_width = len(world_maps[current_level_index][0]) * TILE_SIZE
+            scroll = max(0, min(scroll, level_width - SCREEN_WIDTH))
+
+            # --- Drawing ---
+            draw_background(scroll)
 
             for tile in tiles:
-                screen.blit(terrain_tileset, 
-                           (tile['rect'].x - scroll, tile['rect'].y),
-                           (0, 0, TILE_SIZE, TILE_SIZE))
-            for trap in traps:
-                pygame.draw.rect(screen, RED, trap.move(-scroll, 0))
-            for part in parts:
-                part.draw(screen, scroll)
+                screen.blit(tile['sprite'], (tile['rect'].x - scroll, tile['rect'].y))
+            
+            for enemy in enemies:
+                enemy.draw(screen, scroll, dt)
+            
+            for part_obj in parts:
+                part_obj.draw(screen, scroll)
+            
             if goal:
                 goal_pos = (goal.x - scroll - TILE_SIZE * 0.25, goal.y - goal_image.get_height() + TILE_SIZE)
                 screen.blit(goal_image, goal_pos)
+            
             player.draw(screen, scroll, dt)
-
-            draw_lives(screen, player.lives, 10, 10)
-            parts_text = font.render(f"Zbrani deli: {player.collected_parts}/3", True, WHITE)
-            level_text = font.render(f"Nivo: {current_level}", True, WHITE)
-            screen.blit(parts_text, (10, 50))
-            screen.blit(level_text, (10, 90))
-
+            
+            draw_hud(screen, player.lives, player.collected_parts, current_level_index + 1)
+            
+            # Display interaction prompts
             if goal and player.rect.colliderect(goal):
                 if player.collected_parts >= 3:
-                    if current_level < 3:
-                        draw_message(f"Pritisni E za nadaljevanje v {current_level + 1}. nivo!", WHITE)
+                    if current_level_index < len(world_maps) - 1:
+                        draw_message(f"Press E to proceed to Level {current_level_index + 2}!")
                     else:
-                        draw_message("Pritisni E za končni izziv!", WHITE)
+                        draw_message("Press E for the final challenge!")
                 else:
-                    draw_message("Nimaš vseh delov letala, prosim zberi vse dele letala za nadaljevanje!", WHITE)
-
-            if sound_on and random.random() < 0.001:
-                ambiance_sound.play()
+                    draw_message("You need to collect all the parts first!")
 
         elif game_state == "game_over":
-            draw_text_screen("Konec igre, izgubil si!")
-            pygame.time.wait(2000)
-            current_level = 1
-            player, tiles, traps, parts, goal, enemies = reset_game_state(current_level)
+            draw_text_screen("Game Over!")
+            # Reset for a new game
+            current_level_index = 0
+            player, tiles, traps, parts, goal, enemies = reset_game_state(current_level_index)
             game_state = "intro"
+            if music_on:
+                pygame.mixer.music.load("assets/music/intro.ogg")
+                pygame.mixer.music.play(-1)
 
         elif game_state == "game_complete":
-            draw_text_screen("Čestitamo! Dokončali ste igro!")
-            pygame.time.wait(2000)
-            current_level = 1
-            player, tiles, traps, parts, goal, enemies = reset_game_state(current_level)
+            draw_text_screen("Congratulations! You've escaped!")
+            # Reset for a new game
+            current_level_index = 0
+            player, tiles, traps, parts, goal, enemies = reset_game_state(current_level_index)
             game_state = "intro"
+            if music_on:
+                pygame.mixer.music.load("assets/music/intro.ogg")
+                pygame.mixer.music.play(-1)
 
-
+        # Update the full display Surface to the screen
         pygame.display.flip()
 
+    # --- Shutdown ---
     pygame.quit()
     sys.exit()
 
