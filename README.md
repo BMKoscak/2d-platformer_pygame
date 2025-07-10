@@ -23,7 +23,7 @@ You were on a routine flight when disaster struck. Your plane plummeted into an 
 To get started with Jungle Escape, you'll need Python and Pygame installed on your system.
 
 1.  **Clone or Download:** Get the game files from its source (e.g., GitHub repository or direct download).
-2.  **Navigate to the Game Directory:** Open your terminal or command prompt and go to the folder where you've placed `platformer.py` and the `assets` folder.
+2.  **Navigate to the Game Directory:** Open your terminal or command prompt and go to the folder where you've placed `jungle_escape.py` and the `assets` folder.
     ```bash
     cd path/to/your/game/folder
     ```
@@ -33,13 +33,14 @@ To get started with Jungle Escape, you'll need Python and Pygame installed on yo
     ```
 4.  **Run the Game:**
     ```bash
-    python platformer.py
+    python jungle_escape.py
     ```
 
 ## 🕹️ How to Play
 
-* **Movement:** Use the **arrow keys** or the **left analog stick** on your controller to move your character left and right.
-* **Jump:** Press the **Up arrow key** or the **'A' button (Xbox) / 'X' button (PlayStation)** on your controller to jump.
+* **Movement:** Use the **A/D keys** or **Left/Right Arrow keys** to move your character. The **left analog stick** on a controller also works.
+* **Jump:** Press the **W key**, **Up Arrow key**, or **Spacebar** to jump. On a controller, use the **'A' button (Xbox) / 'X' button (PlayStation)**.
+* **Interact:** Press the **E key** to advance to the next level when at the goal. On a controller, use the **'X' button (Xbox) / 'Square' button (PlayStation)**.
 * **Collect Parts:** Walk over the glowing plane parts to collect them.
 * **Reach the End:** Navigate through each level to find the exit and progress to the next stage.
 * **Main Menu:** Use your mouse or controller to interact with the main menu options.
@@ -53,16 +54,42 @@ While the original game was developed in Slovenian, its Python foundation makes 
 * **Swap Assets:** Replace sprites, backgrounds, and sound effects with your own creative designs.
 * **Tweak Gameplay:** Adjust character speed, jump height, enemy behavior, and more.
 
-Dive into the `platformer.py` file and the `assets` folder to unleash your creativity!
+Dive into the `jungle_escape.py` file and the `assets` folder to unleash your creativity!
 
 ## ⚖️ License & Distribution
 
-This 2D platformer game is released under a **free-to-use and free-to-distribute** license. You are welcome to share it, modify it, and enjoy it without any cost.
+This 2D platformer game is released under the **MIT License**. You are welcome to share it, modify it, and enjoy it without any cost.
 
 **The only requirement is attribution:** If you distribute or showcase this game, please ensure you credit the original author. A simple mention in your documentation, a splash screen, or a "Credits" section within your modified version is greatly appreciated.
 
+---
+
+### MIT License
+
+Copyright (c) 2024 The Benn/BMKoscak
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
 ## 🙏 Credits
 
-**Original Author:** \[The Benn/BMKoscak\]
+**Original Author:** The Benn/BMKoscak
 
 Thank you for playing Jungle Escape! We hope you enjoy the adventure.
