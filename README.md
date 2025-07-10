@@ -63,6 +63,6 @@ This 2D platformer game is released under a **free-to-use and free-to-distribute
 
 ## 🙏 Credits
 
-**Original Author:** \[Your Name/Alias Here\]
+**Original Author:** \[The Benn/BMKoscak\]
 
 Thank you for playing Jungle Escape! We hope you enjoy the adventure.
